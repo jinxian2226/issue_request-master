@@ -5,8 +5,7 @@ import 'services/parts_service.dart';
 import 'services/stock_inquiry_service.dart';
 import 'models/auth_service.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/settings_screen.dart';
+import 'screens/main_navigator.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,8 +59,7 @@ class MyApp extends StatelessWidget {
         routes: {
           '/': (context) => const AuthWrapper(),
           '/login': (context) => const LoginScreen(),
-          '/home': (context) => const HomeScreen(),
-          '/settings': (context) => const SettingsScreen(),
+          '/home': (context) => const MainNavigator(),
         },
       ),
     );
@@ -121,7 +119,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
 
         if (authService.isLoggedIn) {
-          return const HomeScreen();
+          return const MainNavigator();
         }
 
         return const LoginScreen();
