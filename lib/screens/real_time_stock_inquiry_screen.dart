@@ -377,7 +377,6 @@ class _RealTimeStockInquiryScreenState extends State<RealTimeStockInquiryScreen>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      _buildStatusChip(part.status),
                       const SizedBox(height: 4),
                       Text(
                         'RM ${part.pricing.toStringAsFixed(2)}',

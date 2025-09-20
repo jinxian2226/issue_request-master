@@ -119,19 +119,6 @@ class PartDetailsScreen extends StatelessWidget {
                     _buildInfoRow('Category:', part.category),
                     _buildInfoRow('Price:', 'RM ${part.pricing.toStringAsFixed(2)}'),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Text(
-                          'Status:',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _buildStatusChip(part.status),
-                      ],
-                    ),
                   ],
                 ),
               ),
