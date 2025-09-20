@@ -6,6 +6,7 @@ import 'services/stock_inquiry_service.dart';
 import 'models/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigator.dart';
+import 'screens/part_marking.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

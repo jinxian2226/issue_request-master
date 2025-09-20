@@ -177,29 +177,6 @@ class _RequestFormScreenState extends State<RequestFormScreen> {
                 return _buildPartItem(item, index);
               }).toList(),
 
-              // Add More Parts Button
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(vertical: 16),
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    _showMessage('Add more parts feature coming soon');
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF2196F3),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    side: const BorderSide(color: Color(0xFF2196F3)),
-                  ),
-                  icon: const Icon(Icons.add, size: 20),
-                  label: const Text('Add More Parts'),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
               // Request Type
               _buildSectionHeader('Request Type'),
               const SizedBox(height: 8),
