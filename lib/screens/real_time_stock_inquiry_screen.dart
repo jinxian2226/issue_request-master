@@ -4,6 +4,7 @@ import '../services/parts_service.dart';
 import '../models/part.dart';
 import '../screens/part_details_screen.dart';
 
+
 class RealTimeStockInquiryScreen extends StatefulWidget {
   const RealTimeStockInquiryScreen({super.key});
 

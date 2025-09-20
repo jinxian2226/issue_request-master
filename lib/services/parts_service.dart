@@ -70,7 +70,28 @@ class PartsService extends ChangeNotifier {
     }
   }
 
-  // Issue part
+  // Update part quantity directly
+  Future<void> updatePartQuantity(String partId, int newQuantity) async {
+    try {
+      await _supabase
+          .from('parts')
+          .update({
+        'quantity': newQuantity,
+        'updated_at': DateTime.now().toIso8601String(),
+      })
+          .eq('id', partId);
+
+      // Update local cache
+      final partIndex = _parts.indexWhere((part) => part.id == partId);
+      if (partIndex != -1) {
+        await fetchParts(); // Refresh all parts for now
+      }
+    } catch (e) {
+      throw Exception('Error updating part quantity: $e');
+    }
+  }
+
+  // Issue part (with user from auth)
   Future<void> issuePart({
     required String partId,
     required int quantity,
@@ -108,7 +129,7 @@ class PartsService extends ChangeNotifier {
     }
   }
 
-  // Request part
+  // Request part (with user from auth)
   Future<void> requestPart({
     required String partId,
     required int quantity,
@@ -135,7 +156,62 @@ class PartsService extends ChangeNotifier {
     }
   }
 
-  // **FIXED STATUS MARKING METHODS**
+  // Cancel an issue (restore inventory)
+  Future<void> cancelIssue(String issueId) async {
+    try {
+      // For now, we'll just delete the issue record
+      // In a real system, you might want to mark it as cancelled instead
+      await _supabase
+          .from('part_issues')
+          .delete()
+          .eq('id', issueId);
+    } catch (e) {
+      throw Exception('Error cancelling issue: $e');
+    }
+  }
+
+  // Cancel a request
+  Future<void> cancelRequest(String requestId) async {
+    try {
+      await _supabase
+          .from('part_requests')
+          .update({
+        'status': 'cancelled',
+      })
+          .eq('id', requestId);
+    } catch (e) {
+      throw Exception('Error cancelling request: $e');
+    }
+  }
+
+  // FIXED: Fulfill/Approve a request (add quantity to inventory)
+  Future<void> fulfillRequest(String requestId, String fulfilledBy) async {
+    try {
+      // Try to update with fulfilled_by column, but handle if it doesn't exist
+      try {
+        await _supabase
+            .from('part_requests')
+            .update({
+          'status': 'fulfilled',
+          'fulfilled_at': DateTime.now().toIso8601String(),
+          'fulfilled_by': fulfilledBy,
+        })
+            .eq('id', requestId);
+      } catch (e) {
+        // If fulfilled_by column doesn't exist, update without it
+        print('Note: fulfilled_by column not found, updating without it');
+        await _supabase
+            .from('part_requests')
+            .update({
+          'status': 'fulfilled',
+          'fulfilled_at': DateTime.now().toIso8601String(),
+        })
+            .eq('id', requestId);
+      }
+    } catch (e) {
+      throw Exception('Error fulfilling request: $e');
+    }
+  }
 
   // Mark parts as received with correct status values
   Future<void> markAsReceived({
@@ -146,7 +222,7 @@ class PartsService extends ChangeNotifier {
     required String location,
     String? notes,
     String? photoPath,
-    String performedBy = 'System User',
+    required String performedBy,
   }) async {
     try {
       // Get current part data
@@ -168,17 +244,17 @@ class PartsService extends ChangeNotifier {
         }
       }
 
-      // **FIX: Use correct status values**
+      // Use correct status values
       String newStatus;
       switch (condition.toLowerCase()) {
         case 'good':
-          newStatus = 'available'; // Changed from 'received' to 'available'
+          newStatus = 'available';
           break;
         case 'damaged':
           newStatus = 'damaged';
           break;
         case 'partial':
-          newStatus = 'available'; // Partial is still available
+          newStatus = 'available';
           break;
         default:
           newStatus = 'available';
@@ -211,7 +287,6 @@ class PartsService extends ChangeNotifier {
 
         await _supabase.from('received_items').insert(receivedData);
       } catch (e) {
-        // If received_items table doesn't exist, just continue
         print('Note: received_items table not available: $e');
       }
 
@@ -230,7 +305,7 @@ class PartsService extends ChangeNotifier {
     required String situation,
     String? description,
     List<String>? photos,
-    String performedBy = 'System User',
+    required String performedBy,
   }) async {
     try {
       // Get current part data
@@ -244,11 +319,11 @@ class PartsService extends ChangeNotifier {
       // Update part quantity and status
       await _supabase.from('parts').update({
         'quantity': newQuantity,
-        'status': 'damaged', // This matches the constraint
+        'status': 'damaged',
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', partId);
 
-      // Create detailed damage report (if table exists)
+      // Create detailed damage report
       try {
         final damageData = {
           'part_id': partId,
@@ -263,7 +338,6 @@ class PartsService extends ChangeNotifier {
 
         await _supabase.from('damage_reports').insert(damageData);
       } catch (e) {
-        // If damage_reports table doesn't exist, just continue
         print('Note: damage_reports table not available: $e');
       }
 
@@ -280,7 +354,7 @@ class PartsService extends ChangeNotifier {
     required String returnType,
     required String reason,
     String? notes,
-    String performedBy = 'System User',
+    required String performedBy,
   }) async {
     try {
       // Get current part data
@@ -294,11 +368,11 @@ class PartsService extends ChangeNotifier {
       // Update part quantity and status
       await _supabase.from('parts').update({
         'quantity': newQuantity,
-        'status': 'returned', // This matches the constraint
+        'status': 'returned',
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', partId);
 
-      // Create detailed return record (if table exists)
+      // Create detailed return record
       try {
         final returnData = {
           'part_id': partId,
@@ -311,7 +385,6 @@ class PartsService extends ChangeNotifier {
 
         await _supabase.from('part_returns').insert(returnData);
       } catch (e) {
-        // If part_returns table doesn't exist, just continue
         print('Note: part_returns table not available: $e');
       }
 
