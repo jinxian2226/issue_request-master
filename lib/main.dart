@@ -29,7 +29,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => PartsService()),
       ],
       child: MaterialApp(
-        title: 'PartTracker Pro',
+        title: 'PartInventory Pro',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primaryColor: const Color(0xFF2196F3),
