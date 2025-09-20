@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/parts_service.dart';
+import '../models/auth_service.dart';
 import '../models/part.dart';
 import 'part_details_screen.dart';
 import 'search_parts_screen.dart';
 import 'work_order_tracking_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'part_marking.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
         );
         break;
       case 2: // Reports
-      // Navigate to reports screen (to be implemented)
         _showMessage(context, 'Reports feature coming soon');
         break;
       case 3: // Task/Work Orders
@@ -51,9 +52,11 @@ class _HomeScreenState extends State<HomeScreen> {
           MaterialPageRoute(builder: (context) => const WorkOrderTrackingScreen()),
         );
         break;
-      case 4: // Account
-      // Navigate to account screen (to be implemented)
-        _showMessage(context, 'Account feature coming soon');
+      case 4: // Account/Settings
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SettingsScreen()),
+        );
         break;
     }
   }
@@ -97,11 +100,69 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: () {
-              _showMessage(context, 'Profile feature coming soon');
+          // User Profile Button
+          Consumer<AuthService>(
+            builder: (context, authService, child) {
+              return PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'profile':
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      );
+                      break;
+                    case 'logout':
+                      _logout();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'profile',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.settings, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Text('Settings (${authService.currentUser ?? 'User'})'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'logout',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Logout', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2C2C2C),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.person, color: Colors.white, size: 20),
+                      const SizedBox(width: 4),
+                      Text(
+                        authService.currentUser?.substring(0, 1).toUpperCase() ?? 'U',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             },
-            icon: const Icon(Icons.person_outline),
           ),
         ],
       ),
@@ -139,6 +200,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2C2C2C),
+        title: const Text(
+          'Logout',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'Are you sure you want to logout?',
+          style: TextStyle(color: Colors.grey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final authService = context.read<AuthService>();
+      await authService.logout();
+
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
+    }
+  }
+
   void _showMessage(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -159,6 +257,49 @@ class HomeContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Welcome Section
+          Consumer<AuthService>(
+            builder: (context, authService, child) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF2196F3).withOpacity(0.8),
+                      const Color(0xFF1976D2).withOpacity(0.8),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome back, ${authService.currentUser ?? 'User'}!',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Ready to manage your spare parts inventory?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+
           const Text(
             'Part Request/Issue',
             style: TextStyle(
@@ -179,6 +320,7 @@ class HomeContent extends StatelessWidget {
             icon: Icons.qr_code_scanner,
             title: 'Scan Barcodes',
             subtitle: 'Capture scan parts from work orders or for storage',
+            color: const Color(0xFF4CAF50),
             onTap: () {
               Navigator.push(
                 context,
@@ -193,6 +335,7 @@ class HomeContent extends StatelessWidget {
             icon: Icons.track_changes,
             title: 'Work Order Tracking',
             subtitle: 'View work orders that are attached',
+            color: const Color(0xFF9C27B0),
             onTap: () {
               Navigator.push(
                 context,
@@ -207,6 +350,7 @@ class HomeContent extends StatelessWidget {
             icon: Icons.search,
             title: 'Search Options',
             subtitle: 'Search for parts by prefix or barcode',
+            color: const Color(0xFF2196F3),
             onTap: () {
               Navigator.push(
                 context,
@@ -223,6 +367,7 @@ class HomeContent extends StatelessWidget {
             icon: Icons.inventory_2,
             title: 'Inventory Management',
             subtitle: 'Manage stock levels and part locations',
+            color: const Color(0xFFFF9800),
             onTap: () {
               _showMessage(context, 'Inventory Management feature coming soon');
             },
@@ -234,6 +379,7 @@ class HomeContent extends StatelessWidget {
             icon: Icons.check_box,
             title: 'Parts Marking',
             subtitle: 'Mark the status of parts in inventory',
+            color: const Color(0xFF607D8B),
             onTap: () {
               Navigator.push(
                 context,
@@ -243,6 +389,8 @@ class HomeContent extends StatelessWidget {
               );
             },
           ),
+
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -254,6 +402,7 @@ class HomeContent extends StatelessWidget {
         final totalParts = partsService.parts.length;
         final lowStockParts = partsService.parts.where((part) => part.quantity < 5).length;
         final availableParts = partsService.parts.where((part) => part.quantity > 0).length;
+        final damagedParts = partsService.parts.where((part) => part.status == 'damaged').length;
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -305,12 +454,25 @@ class HomeContent extends StatelessWidget {
                       Colors.green,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
                   Expanded(
                     child: _buildStatItem(
                       'Low Stock',
                       lowStockParts.toString(),
                       Icons.warning,
                       Colors.orange,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      'Damaged',
+                      damagedParts.toString(),
+                      Icons.error,
+                      Colors.red,
                     ),
                   ),
                 ],
@@ -323,28 +485,39 @@ class HomeContent extends StatelessWidget {
   }
 
   Widget _buildStatItem(String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            color: color,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          textAlign: TextAlign.center,
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -353,6 +526,7 @@ class HomeContent extends StatelessWidget {
         required IconData icon,
         required String title,
         required String subtitle,
+        required Color color,
         required VoidCallback onTap,
       }) {
     return Card(
@@ -367,7 +541,7 @@ class HomeContent extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2196F3),
+                  color: color,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: Colors.white, size: 24),
