@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/part.dart';
 
-
 class PartsService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -136,9 +135,201 @@ class PartsService extends ChangeNotifier {
     }
   }
 
+  // **FIXED STATUS MARKING METHODS**
+
+  // Mark parts as received with correct status values
+  Future<void> markAsReceived({
+    required String partId,
+    required int quantityReceived,
+    required String packageType,
+    required String condition,
+    required String location,
+    String? notes,
+    String? photoPath,
+    String performedBy = 'System User',
+  }) async {
+    try {
+      // Get current part data
+      final part = await getPartById(partId);
+      if (part == null) {
+        throw Exception('Part not found');
+      }
+
+      final newQuantity = part.quantity + quantityReceived;
+
+      // Parse location for warehouse_bay and shelf_number
+      String? warehouseBay;
+      String? shelfNumber;
+      if (location.isNotEmpty) {
+        final locationParts = location.split(' - ');
+        if (locationParts.length >= 2) {
+          warehouseBay = locationParts[0];
+          shelfNumber = locationParts[1];
+        }
+      }
+
+      // **FIX: Use correct status values**
+      String newStatus;
+      switch (condition.toLowerCase()) {
+        case 'good':
+          newStatus = 'available'; // Changed from 'received' to 'available'
+          break;
+        case 'damaged':
+          newStatus = 'damaged';
+          break;
+        case 'partial':
+          newStatus = 'available'; // Partial is still available
+          break;
+        default:
+          newStatus = 'available';
+      }
+
+      // Update part quantity and status
+      final updateData = {
+        'quantity': newQuantity,
+        'status': newStatus,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (warehouseBay != null) updateData['warehouse_bay'] = warehouseBay;
+      if (shelfNumber != null) updateData['shelf_number'] = shelfNumber;
+
+      await _supabase.from('parts').update(updateData).eq('id', partId);
+
+      // Create detailed received item record (if table exists)
+      try {
+        final receivedData = {
+          'part_id': partId,
+          'quantity_received': quantityReceived,
+          'package_type': packageType,
+          'condition': condition,
+          'location': location,
+          'notes': notes,
+          'photo_paths': photoPath != null ? [photoPath] : null,
+          'received_by': performedBy,
+        };
+
+        await _supabase.from('received_items').insert(receivedData);
+      } catch (e) {
+        // If received_items table doesn't exist, just continue
+        print('Note: received_items table not available: $e');
+      }
+
+      await fetchParts();
+    } catch (e) {
+      throw Exception('Error marking part as received: $e');
+    }
+  }
+
+  // Mark parts as damaged with correct status values
+  Future<void> markAsDamaged({
+    required String partId,
+    required int quantityDamaged,
+    required String damageType,
+    required String cause,
+    required String situation,
+    String? description,
+    List<String>? photos,
+    String performedBy = 'System User',
+  }) async {
+    try {
+      // Get current part data
+      final part = await getPartById(partId);
+      if (part == null) {
+        throw Exception('Part not found');
+      }
+
+      final newQuantity = (part.quantity - quantityDamaged).clamp(0, 999999);
+
+      // Update part quantity and status
+      await _supabase.from('parts').update({
+        'quantity': newQuantity,
+        'status': 'damaged', // This matches the constraint
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', partId);
+
+      // Create detailed damage report (if table exists)
+      try {
+        final damageData = {
+          'part_id': partId,
+          'damage_type': damageType,
+          'cause': cause,
+          'situation': situation,
+          'quantity_damaged': quantityDamaged,
+          'description': description,
+          'photos': photos,
+          'reported_by': performedBy,
+        };
+
+        await _supabase.from('damage_reports').insert(damageData);
+      } catch (e) {
+        // If damage_reports table doesn't exist, just continue
+        print('Note: damage_reports table not available: $e');
+      }
+
+      await fetchParts();
+    } catch (e) {
+      throw Exception('Error marking part as damaged: $e');
+    }
+  }
+
+  // Mark parts as returned with correct status values
+  Future<void> markAsReturned({
+    required String partId,
+    required int quantityReturned,
+    required String returnType,
+    required String reason,
+    String? notes,
+    String performedBy = 'System User',
+  }) async {
+    try {
+      // Get current part data
+      final part = await getPartById(partId);
+      if (part == null) {
+        throw Exception('Part not found');
+      }
+
+      final newQuantity = (part.quantity - quantityReturned).clamp(0, 999999);
+
+      // Update part quantity and status
+      await _supabase.from('parts').update({
+        'quantity': newQuantity,
+        'status': 'returned', // This matches the constraint
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', partId);
+
+      // Create detailed return record (if table exists)
+      try {
+        final returnData = {
+          'part_id': partId,
+          'return_type': returnType,
+          'reason': reason,
+          'quantity_returned': quantityReturned,
+          'notes': notes,
+          'returned_by': performedBy,
+        };
+
+        await _supabase.from('part_returns').insert(returnData);
+      } catch (e) {
+        // If part_returns table doesn't exist, just continue
+        print('Note: part_returns table not available: $e');
+      }
+
+      await fetchParts();
+    } catch (e) {
+      throw Exception('Error marking part as returned: $e');
+    }
+  }
+
   // Update part status for inventory adjustment
   Future<void> updatePartStatus(String partId, String status) async {
     try {
+      // Ensure status is valid
+      const validStatuses = ['received', 'damaged', 'returned', 'available', 'out_of_stock'];
+      if (!validStatuses.contains(status)) {
+        throw Exception('Invalid status: $status. Valid values: ${validStatuses.join(', ')}');
+      }
+
       await _supabase
           .from('parts')
           .update({'status': status, 'updated_at': DateTime.now().toIso8601String()})

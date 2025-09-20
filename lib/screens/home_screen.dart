@@ -9,6 +9,9 @@ import 'work_order_tracking_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'part_marking.dart';
 import 'settings_screen.dart';
+import '../widgets/stock_inquiry_dashboard_widget.dart';
+import '../widgets/quick_stock_check_widget.dart';
+import '../widgets/stock_alert_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

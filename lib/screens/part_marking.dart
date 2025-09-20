@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/parts_service.dart';
 import '../models/part.dart';
 import 'mark_as_received_sheet.dart';
@@ -14,9 +15,9 @@ class PartMarkingScreen extends StatefulWidget {
 
 class _PartMarkingScreenState extends State<PartMarkingScreen> {
   final _searchCtrl = TextEditingController();
-  final _service = PartsService();
 
   bool _loading = false;
+  bool _updating = false;
 
   List<Part> _results = [];
   Part? _part;
@@ -40,13 +41,11 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
     setState(() => _loading = true);
 
     try {
-      // If it's different, change this line.
-      final parts = await _service.searchParts(q); // returns List<Part>
+      final partsService = context.read<PartsService>();
+      final parts = await partsService.searchParts(q);
 
       setState(() {
         _results = parts;
-        // Auto-select the first result
-        // _part = parts.isNotEmpty ? parts.first : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -75,27 +74,52 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
     );
 
     if (result == null) return;
-    setState(() {
-      _part = Part(
-        id: _part!.id,
-        partNumber: _part!.partNumber,
-        name: _part!.name,
-        category: _part!.category,
-        quantity: _part!.quantity + result.units,
-        status: 'received',
-        warehouseBay: _part!.warehouseBay,
-        shelfNumber: _part!.shelfNumber,
-        pricing: _part!.pricing,
-        createdAt: _part!.createdAt,
-        updatedAt: DateTime.now(),
+
+    setState(() => _updating = true);
+
+    try {
+      final partsService = context.read<PartsService>();
+      await partsService.markAsReceived(
+        partId: _part!.id,
+        quantityReceived: result.units,
+        packageType: result.packageType,
+        condition: result.condition,
+        location: result.location,
+        notes: result.notes,
+        photoPath: result.photoPath,
       );
-    });
 
+      // Refresh the part data
+      final updatedParts = await partsService.searchParts(_part!.partNumber);
+      if (updatedParts.isNotEmpty) {
+        setState(() {
+          _part = updatedParts.first;
+          // Update results if the part is in the list
+          final index = _results.indexWhere((p) => p.id == _part!.id);
+          if (index != -1) {
+            _results[index] = _part!;
+          }
+        });
+      }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Received saved (local only).')),
-    );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully marked ${result.units} units as received'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error marking as received: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
   }
 
   Future<void> _openMarkAsDamaged() async {
@@ -115,27 +139,51 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
 
     if (result == null) return;
 
-    final newQty = (_part!.quantity - result.quantity).clamp(0, 1 << 31);
-    setState(() {
-      _part = Part(
-        id: _part!.id,
-        partNumber: _part!.partNumber,
-        name: _part!.name,
-        category: _part!.category,
-        quantity: newQty,
-        status: 'damaged',
-        warehouseBay: _part!.warehouseBay,
-        shelfNumber: _part!.shelfNumber,
-        pricing: _part!.pricing,
-        createdAt: _part!.createdAt,
-        updatedAt: DateTime.now(),
-      );
-    });
+    setState(() => _updating = true);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Damage recorded (local only).')),
-    );
+    try {
+      final partsService = context.read<PartsService>();
+      await partsService.markAsDamaged(
+        partId: _part!.id,
+        quantityDamaged: result.quantity,
+        damageType: result.damageType,
+        cause: result.cause,
+        situation: result.situation,
+        description: result.description,
+        photos: result.photos,
+      );
+
+      // Refresh the part data
+      final updatedParts = await partsService.searchParts(_part!.partNumber);
+      if (updatedParts.isNotEmpty) {
+        setState(() {
+          _part = updatedParts.first;
+          // Update results if the part is in the list
+          final index = _results.indexWhere((p) => p.id == _part!.id);
+          if (index != -1) {
+            _results[index] = _part!;
+          }
+        });
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully marked ${result.quantity} units as damaged'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error marking as damaged: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
   }
 
   Future<void> _openMarkAsReturned() async {
@@ -155,27 +203,49 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
 
     if (result == null) return;
 
-    final newQty = (_part!.quantity - result.quantity).clamp(0, 1 << 31);
-    setState(() {
-      _part = Part(
-        id: _part!.id,
-        partNumber: _part!.partNumber,
-        name: _part!.name,
-        category: _part!.category,
-        quantity: newQty,
-        status: 'returned',
-        warehouseBay: _part!.warehouseBay,
-        shelfNumber: _part!.shelfNumber,
-        pricing: _part!.pricing,
-        createdAt: _part!.createdAt,
-        updatedAt: DateTime.now(),
-      );
-    });
+    setState(() => _updating = true);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Return submitted (local only).')),
-    );
+    try {
+      final partsService = context.read<PartsService>();
+      await partsService.markAsReturned(
+        partId: _part!.id,
+        quantityReturned: result.quantity,
+        returnType: result.returnType,
+        reason: result.reason,
+        notes: result.notes,
+      );
+
+      // Refresh the part data
+      final updatedParts = await partsService.searchParts(_part!.partNumber);
+      if (updatedParts.isNotEmpty) {
+        setState(() {
+          _part = updatedParts.first;
+          // Update results if the part is in the list
+          final index = _results.indexWhere((p) => p.id == _part!.id);
+          if (index != -1) {
+            _results[index] = _part!;
+          }
+        });
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully processed return for ${result.quantity} units'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error processing return: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
   }
 
   // ------------------------------- UI --------------------------------
@@ -188,92 +258,137 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
         backgroundColor: Colors.black,
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: "Enter part number",
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      filled: true,
-                      fillColor: Colors.grey[900],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        decoration: InputDecoration(
+                          hintText: "Enter part number",
+                          hintStyle: const TextStyle(color: Colors.grey),
+                          filled: true,
+                          fillColor: Colors.grey[900],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onSubmitted: (_) => _search(),
                       ),
                     ),
-                    onSubmitted: (_) => _search(),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _loading ? null : _search,
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                      child: _loading
+                          ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : const Text("Search"),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                if (_part != null) ...[
+                  _partHeaderCard(_part!),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Update Part Status",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _search,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                  child: const Text("Search"),
-                ),
+                  const SizedBox(height: 8),
+                  _statusButton("Mark as Received", Colors.blue, _openMarkAsReceived),
+                  const SizedBox(height: 8),
+                  _statusButton("Mark as Damaged", Colors.red, _openMarkAsDamaged),
+                  const SizedBox(height: 8),
+                  _statusButton("Mark as Returned", Colors.grey, _openMarkAsReturned),
+                  const SizedBox(height: 16),
+                ],
+
+                // Results
+                if (!_loading)
+                  Expanded(
+                    child: _results.isEmpty
+                        ? const SizedBox.shrink()
+                        : ListView.separated(
+                      itemCount: _results.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final p = _results[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            p.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text("SKU: ${p.partNumber}"),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                "Qty: ${p.quantity}",
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              Text(
+                                p.status.toUpperCase(),
+                                style: TextStyle(
+                                  color: _getStatusColor(p.status),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            setState(() => _part = p);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                if (_loading)
+                  const Expanded(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
               ],
             ),
+          ),
 
-            const SizedBox(height: 16),
-
-            if (_part != null) ...[
-              _partHeaderCard(_part!),
-              const SizedBox(height: 16),
-              const Text(
-                "Update Part Status",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              _statusButton("Mark as Received", Colors.blue, _openMarkAsReceived),
-              const SizedBox(height: 8),
-              _statusButton("Mark as Damaged", Colors.red, _openMarkAsDamaged),
-              const SizedBox(height: 8),
-              _statusButton("Mark as Returned", Colors.grey, _openMarkAsReturned),
-              const SizedBox(height: 16),
-            ],
-
-            // Results
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-
-            if (!_loading)
-              Expanded(
-                child: _results.isEmpty
-                    ? const SizedBox.shrink()
-                    : ListView.separated(
-                  itemCount: _results.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final p = _results[i];
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        p.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text("SKU: ${p.partNumber}"),
-                      trailing: Text(
-                        "Qty: ${p.quantity}",
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      onTap: () {
-                        setState(() => _part = p);
-                      },
-                    );
-                  },
+          // Loading overlay when updating
+          if (_updating)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      'Updating part status...',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
 
       bottomNavigationBar: BottomNavigationBar(
@@ -292,10 +407,22 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
     );
   }
 
-  // ---------- Small widgets ----------
+  // ---------- Helper methods ----------
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'received':
+        return Colors.green;
+      case 'damaged':
+        return Colors.red;
+      case 'returned':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
 
   Widget _partHeaderCard(Part part) {
-
     final name = part.name;
     final sku = part.partNumber;
     final qty = part.quantity;
@@ -331,15 +458,20 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
               ],
             ),
           ),
-          Text(
-            status.isEmpty ? '—' : status[0].toUpperCase() + status.substring(1),
-            style: TextStyle(
-              color: status == 'damaged'
-                  ? Colors.redAccent
-                  : status == 'returned'
-                  ? Colors.amber
-                  : Colors.greenAccent,
-              fontWeight: FontWeight.w600,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _getStatusColor(status).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _getStatusColor(status), width: 1),
+            ),
+            child: Text(
+              status.isEmpty ? '—' : status.toUpperCase(),
+              style: TextStyle(
+                color: _getStatusColor(status),
+                fontWeight: FontWeight.w600,
+                fontSize: 10,
+              ),
             ),
           ),
         ],
@@ -355,7 +487,7 @@ class _PartMarkingScreenState extends State<PartMarkingScreen> {
           backgroundColor: color,
           padding: const EdgeInsets.symmetric(vertical: 14),
         ),
-        onPressed: onPressed,
+        onPressed: _updating ? null : onPressed,
         child: Text(text),
       ),
     );
