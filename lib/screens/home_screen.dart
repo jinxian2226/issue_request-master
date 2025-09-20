@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/parts_service.dart';
-import '../services/auth_service.dart';
+import '../models/auth_service.dart';
 import '../models/part.dart';
 import 'part_details_screen.dart';
 import 'search_parts_screen.dart';
