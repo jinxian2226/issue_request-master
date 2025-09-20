@@ -1,12 +1,68 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../services/parts_service.dart';
-import '../models/part.dart';
-import '../screens/part_details_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/real_time_stock_inquiry_screen.dart';
 
 class StockAlertWidget extends StatelessWidget {
   const StockAlertWidget({super.key});
+
+  // Direct Supabase query for stock alerts
+  Future<Map<String, List<Map<String, dynamic>>>> _getStockAlerts() async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Get parts data for alerts
+      final response = await supabase
+          .from('parts')
+          .select('id, part_number, name, category, quantity, pricing, warehouse_bay, shelf_number');
+
+      print('Stock alerts query response: ${response.length} parts found');
+
+      Map<String, List<Map<String, dynamic>>> alerts = {
+        'low_stock': [],
+        'out_of_stock': [],
+        'no_location': [],
+        'high_value_low_stock': [],
+      };
+
+      for (var part in response) {
+        final quantity = part['quantity'] ?? 0;
+        final pricing = (part['pricing'] ?? 0.0).toDouble();
+        final warehouseBay = part['warehouse_bay'];
+        final shelfNumber = part['shelf_number'];
+
+        // Out of stock alert (quantity = 0)
+        if (quantity == 0) {
+          alerts['out_of_stock']!.add(part);
+        }
+
+        // Low stock alert (quantity < 5 but > 0)
+        else if (quantity < 5 && quantity > 0) {
+          alerts['low_stock']!.add(part);
+        }
+
+        // No location assigned
+        if (warehouseBay == null || shelfNumber == null) {
+          alerts['no_location']!.add(part);
+        }
+
+        // High value parts with low stock (price > 100 and quantity < 3)
+        if (pricing > 100 && quantity < 3) {
+          alerts['high_value_low_stock']!.add(part);
+        }
+      }
+
+      print('Alerts found:');
+      print('- Out of stock: ${alerts['out_of_stock']!.length}');
+      print('- Low stock: ${alerts['low_stock']!.length}');
+      print('- No location: ${alerts['no_location']!.length}');
+      print('- High value low stock: ${alerts['high_value_low_stock']!.length}');
+
+      return alerts;
+    } catch (e) {
+      print('Stock alerts error: $e');
+      rethrow;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,114 +112,105 @@ class StockAlertWidget extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Alert Cards
-          Consumer<PartsService>(
-            builder: (context, partsService, child) {
-              return FutureBuilder<Map<String, List<Part>>>(
-                future: _getPartsNeedingAttention(partsService),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF2196F3),
-                        strokeWidth: 2,
-                      ),
-                    );
-                  }
+          FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+            future: _getStockAlerts(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF2196F3),
+                    strokeWidth: 2,
+                  ),
+                );
+              }
 
-                  if (!snapshot.hasData || snapshot.hasError) {
-                    return _buildEmptyAlert();
-                  }
+              if (snapshot.hasError) {
+                return _buildErrorAlert(snapshot.error.toString());
+              }
 
-                  final attentionParts = snapshot.data!;
-                  final lowStockParts = attentionParts['low_stock'] ?? [];
-                  final noLocationParts = attentionParts['no_location'] ?? [];
-                  final highValueLowStock = attentionParts['high_value_low_stock'] ?? [];
+              if (!snapshot.hasData) {
+                return _buildErrorAlert('No data available');
+              }
 
-                  if (lowStockParts.isEmpty && noLocationParts.isEmpty && highValueLowStock.isEmpty) {
-                    return _buildEmptyAlert();
-                  }
+              final alerts = snapshot.data!;
+              final outOfStockParts = alerts['out_of_stock'] ?? [];
+              final lowStockParts = alerts['low_stock'] ?? [];
+              final noLocationParts = alerts['no_location'] ?? [];
+              final highValueLowStock = alerts['high_value_low_stock'] ?? [];
 
-                  return Column(
-                    children: [
-                      // Critical Alerts (High Value Low Stock)
-                      if (highValueLowStock.isNotEmpty)
-                        _buildAlertCard(
-                          context,
-                          'Critical Stock Alert',
-                          '${highValueLowStock.length} high-value parts need immediate attention',
-                          Icons.priority_high,
-                          Colors.red,
-                          highValueLowStock.take(2).toList(),
-                              () => _showAlertDetails(context, 'High Value Low Stock', highValueLowStock),
-                        ),
+              // FIXED: Check for ALL types of alerts including out of stock
+              if (outOfStockParts.isEmpty && lowStockParts.isEmpty &&
+                  noLocationParts.isEmpty && highValueLowStock.isEmpty) {
+                return _buildEmptyAlert();
+              }
 
-                      if (highValueLowStock.isNotEmpty) const SizedBox(height: 8),
+              return Column(
+                children: [
+                  // Out of Stock Alert (HIGHEST PRIORITY)
+                  if (outOfStockParts.isNotEmpty)
+                    _buildAlertCard(
+                      context,
+                      'Out of Stock Alert',
+                      '${outOfStockParts.length} parts are completely out of stock',
+                      Icons.error,
+                      Colors.red,
+                      outOfStockParts.take(2).toList(),
+                          () => _showAlertDetails(context, 'Out of Stock Parts', outOfStockParts),
+                    ),
 
-                      // Low Stock Alert
-                      if (lowStockParts.isNotEmpty)
-                        _buildAlertCard(
-                          context,
-                          'Low Stock Warning',
-                          '${lowStockParts.length} parts running low on stock',
-                          Icons.warning,
-                          Colors.orange,
-                          lowStockParts.take(2).toList(),
-                              () => _showAlertDetails(context, 'Low Stock Parts', lowStockParts),
-                        ),
+                  if (outOfStockParts.isNotEmpty &&
+                      (highValueLowStock.isNotEmpty || lowStockParts.isNotEmpty))
+                    const SizedBox(height: 8),
 
-                      if (lowStockParts.isNotEmpty && noLocationParts.isNotEmpty)
-                        const SizedBox(height: 8),
+                  // Critical Alerts (High Value Low Stock)
+                  if (highValueLowStock.isNotEmpty)
+                    _buildAlertCard(
+                      context,
+                      'Critical Stock Alert',
+                      '${highValueLowStock.length} high-value parts need immediate attention',
+                      Icons.priority_high,
+                      Colors.red,
+                      highValueLowStock.take(2).toList(),
+                          () => _showAlertDetails(context, 'High Value Low Stock', highValueLowStock),
+                    ),
 
-                      // Location Missing Alert
-                      if (noLocationParts.isNotEmpty)
-                        _buildAlertCard(
-                          context,
-                          'Location Missing',
-                          '${noLocationParts.length} parts need location assignment',
-                          Icons.location_off,
-                          Colors.blue,
-                          noLocationParts.take(2).toList(),
-                              () => _showAlertDetails(context, 'Parts Without Location', noLocationParts),
-                        ),
-                    ],
-                  );
-                },
+                  if (highValueLowStock.isNotEmpty && lowStockParts.isNotEmpty)
+                    const SizedBox(height: 8),
+
+                  // Low Stock Alert
+                  if (lowStockParts.isNotEmpty)
+                    _buildAlertCard(
+                      context,
+                      'Low Stock Warning',
+                      '${lowStockParts.length} parts running low on stock',
+                      Icons.warning,
+                      Colors.orange,
+                      lowStockParts.take(2).toList(),
+                          () => _showAlertDetails(context, 'Low Stock Parts', lowStockParts),
+                    ),
+
+                  if ((outOfStockParts.isNotEmpty || lowStockParts.isNotEmpty || highValueLowStock.isNotEmpty) &&
+                      noLocationParts.isNotEmpty)
+                    const SizedBox(height: 8),
+
+                  // Location Missing Alert (LOWEST PRIORITY)
+                  if (noLocationParts.isNotEmpty)
+                    _buildAlertCard(
+                      context,
+                      'Location Missing',
+                      '${noLocationParts.length} parts need location assignment',
+                      Icons.location_off,
+                      Colors.blue,
+                      noLocationParts.take(2).toList(),
+                          () => _showAlertDetails(context, 'Parts Without Location', noLocationParts),
+                    ),
+                ],
               );
             },
           ),
         ],
       ),
     );
-  }
-
-  Future<Map<String, List<Part>>> _getPartsNeedingAttention(PartsService partsService) async {
-    await partsService.fetchParts();
-    final parts = partsService.parts;
-
-    Map<String, List<Part>> attentionParts = {
-      'low_stock': [],
-      'no_location': [],
-      'high_value_low_stock': [],
-    };
-
-    for (Part part in parts) {
-      // Low stock alert
-      if (part.quantity < 5 && part.quantity > 0) {
-        attentionParts['low_stock']!.add(part);
-      }
-
-      // No location assigned
-      if (part.warehouseBay == null || part.shelfNumber == null) {
-        attentionParts['no_location']!.add(part);
-      }
-
-      // High value parts with low stock
-      if (part.pricing > 100 && part.quantity < 3) {
-        attentionParts['high_value_low_stock']!.add(part);
-      }
-    }
-
-    return attentionParts;
   }
 
   Widget _buildEmptyAlert() {
@@ -183,12 +230,47 @@ class StockAlertWidget extends StatelessWidget {
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'All parts are well-stocked',
+              'All parts are well-stocked and properly located',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorAlert(String error) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C2C2C),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 24,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Unable to load alerts',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            error,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
             ),
           ),
         ],
@@ -202,7 +284,7 @@ class StockAlertWidget extends StatelessWidget {
       String subtitle,
       IconData icon,
       Color color,
-      List<Part> sampleParts,
+      List<Map<String, dynamic>> sampleParts,
       VoidCallback onTap,
       ) {
     return Container(
@@ -267,7 +349,7 @@ class StockAlertWidget extends StatelessWidget {
                       const SizedBox(width: 28), // Align with icon
                       Expanded(
                         child: Text(
-                          '${part.partNumber} - ${part.name}',
+                          '${part['part_number']} - ${part['name']}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -276,22 +358,21 @@ class StockAlertWidget extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (title.contains('Stock'))
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${part.quantity} left',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          part['quantity'] == 0 ? 'OUT' : '${part['quantity']} left',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
+                      ),
                     ],
                   ),
                 )),
@@ -303,7 +384,7 @@ class StockAlertWidget extends StatelessWidget {
     );
   }
 
-  void _showAlertDetails(BuildContext context, String title, List<Part> parts) {
+  void _showAlertDetails(BuildContext context, String title, List<Map<String, dynamic>> parts) {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF2C2C2C),
@@ -387,7 +468,7 @@ class StockAlertWidget extends StatelessWidget {
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             title: Text(
-                              part.partNumber,
+                              part['part_number'],
                               style: const TextStyle(
                                 color: Color(0xFF2196F3),
                                 fontWeight: FontWeight.bold,
@@ -398,7 +479,7 @@ class StockAlertWidget extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  part.name,
+                                  part['name'],
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -408,11 +489,11 @@ class StockAlertWidget extends StatelessWidget {
                                 Row(
                                   children: [
                                     Text(
-                                      'Stock: ${part.quantity}',
+                                      'Stock: ${part['quantity']}',
                                       style: TextStyle(
-                                        color: part.quantity == 0
+                                        color: part['quantity'] == 0
                                             ? Colors.red
-                                            : part.quantity < 5
+                                            : part['quantity'] < 5
                                             ? Colors.orange
                                             : Colors.green,
                                         fontSize: 11,
@@ -420,7 +501,7 @@ class StockAlertWidget extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 12),
                                     Text(
-                                      'Location: ${part.location}',
+                                      'Location: ${_getLocation(part)}',
                                       style: const TextStyle(
                                         color: Colors.grey,
                                         fontSize: 11,
@@ -435,7 +516,7 @@ class StockAlertWidget extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  'RM ${part.pricing.toStringAsFixed(2)}',
+                                  'RM ${(part['pricing'] ?? 0.0).toStringAsFixed(2)}',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 12,
@@ -443,7 +524,7 @@ class StockAlertWidget extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  part.category,
+                                  part['category'] ?? 'Unknown',
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 10,
@@ -453,12 +534,7 @@ class StockAlertWidget extends StatelessWidget {
                             ),
                             onTap: () {
                               Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PartDetailsScreen(part: part),
-                                ),
-                              );
+                              // Navigate to part details if needed
                             },
                           ),
                         );
@@ -472,5 +548,15 @@ class StockAlertWidget extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _getLocation(Map<String, dynamic> part) {
+    final warehouseBay = part['warehouse_bay'];
+    final shelfNumber = part['shelf_number'];
+
+    if (warehouseBay != null && shelfNumber != null) {
+      return '$warehouseBay - $shelfNumber';
+    }
+    return 'No location';
   }
 }

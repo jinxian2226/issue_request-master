@@ -1,10 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../services/stock_inquiry_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/real_time_stock_inquiry_screen.dart';
 
 class StockInquiryDashboardWidget extends StatelessWidget {
   const StockInquiryDashboardWidget({super.key});
+
+  // Direct Supabase query - bypassing the service layer
+  Future<Map<String, dynamic>> _getDashboardData() async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Simple query to get all parts data
+      final response = await supabase
+          .from('parts')
+          .select('quantity, pricing, warehouse_bay, shelf_number');
+
+      print('Dashboard query response: $response');
+
+      if (response.isEmpty) {
+        return {
+          'total_parts': 0,
+          'in_stock_parts': 0,
+          'low_stock_parts': 0,
+          'out_of_stock_parts': 0,
+          'total_inventory_value': 0.0,
+          'stock_health_percentage': 0.0,
+          'location_completion_percentage': 0.0,
+          'last_updated': DateTime.now(),
+        };
+      }
+
+      final totalParts = response.length;
+      int inStockParts = 0;
+      int lowStockParts = 0;
+      int outOfStockParts = 0;
+      double totalValue = 0.0;
+      int partsWithLocation = 0;
+
+      for (var part in response) {
+        final quantity = part['quantity'] ?? 0;
+        final pricing = (part['pricing'] ?? 0.0).toDouble();
+        final warehouseBay = part['warehouse_bay'];
+        final shelfNumber = part['shelf_number'];
+
+        // Calculate totals
+        totalValue += quantity * pricing;
+
+        // Stock categorization
+        if (quantity == 0) {
+          outOfStockParts++;
+        } else if (quantity < 5) {
+          lowStockParts++;
+          inStockParts++; // Low stock items are still "in stock"
+        } else {
+          inStockParts++;
+        }
+
+        // Location tracking
+        if (warehouseBay != null && shelfNumber != null) {
+          partsWithLocation++;
+        }
+      }
+
+      final stockHealthPercentage = totalParts > 0 ? (inStockParts / totalParts * 100) : 0.0;
+      final locationCompletionPercentage = totalParts > 0 ? (partsWithLocation / totalParts * 100) : 0.0;
+
+      return {
+        'total_parts': totalParts,
+        'in_stock_parts': inStockParts,
+        'low_stock_parts': lowStockParts,
+        'out_of_stock_parts': outOfStockParts,
+        'total_inventory_value': totalValue,
+        'stock_health_percentage': stockHealthPercentage,
+        'location_completion_percentage': locationCompletionPercentage,
+        'last_updated': DateTime.now(),
+      };
+    } catch (e) {
+      print('Dashboard error: $e');
+      rethrow;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,27 +129,24 @@ class StockInquiryDashboardWidget extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Dashboard Content
-          ChangeNotifierProvider(
-            create: (context) => StockInquiryService(),
-            child: Consumer<StockInquiryService>(
-              builder: (context, stockService, child) {
-                return FutureBuilder<Map<String, dynamic>>(
-                  future: stockService.getStockInquiryDashboard(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _buildLoadingState();
-                    }
+          FutureBuilder<Map<String, dynamic>>(
+            future: _getDashboardData(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return _buildLoadingState();
+              }
 
-                    if (snapshot.hasError || !snapshot.hasData) {
-                      return _buildErrorState();
-                    }
+              if (snapshot.hasError) {
+                return _buildErrorState(snapshot.error.toString());
+              }
 
-                    final dashboardData = snapshot.data!;
-                    return _buildDashboardContent(context, dashboardData);
-                  },
-                );
-              },
-            ),
+              if (!snapshot.hasData) {
+                return _buildErrorState('No data available');
+              }
+
+              final dashboardData = snapshot.data!;
+              return _buildDashboardContent(context, dashboardData);
+            },
           ),
         ],
       ),
@@ -96,28 +168,29 @@ class StockInquiryDashboardWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(String error) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2C),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(
+          const Icon(
             Icons.error_outline,
             color: Colors.red,
             size: 32,
           ),
-          SizedBox(height: 8),
-          Text(
+          const SizedBox(height: 8),
+          const Text(
             'Unable to load dashboard data',
             style: TextStyle(color: Colors.white, fontSize: 14),
           ),
           Text(
-            'Please check your connection',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
+            error,
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
