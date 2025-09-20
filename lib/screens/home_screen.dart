@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/parts_service.dart';
+import '../services/stock_inquiry_service.dart';
 import '../models/auth_service.dart';
 import '../models/part.dart';
 import 'part_details_screen.dart';
 import 'search_parts_screen.dart';
+import 'real_time_stock_inquiry_screen.dart';
 import 'work_order_tracking_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'part_marking.dart';
@@ -27,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Initialize all services
       context.read<PartsService>().fetchParts();
     });
   }
@@ -43,11 +46,11 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1: // Search
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const SearchPartsScreen()),
+          MaterialPageRoute(builder: (context) => const RealTimeStockInquiryScreen()),
         );
         break;
       case 2: // Reports
-        _showMessage(context, 'Reports feature coming soon');
+        _showReportsBottomSheet();
         break;
       case 3: // Task/Work Orders
         Navigator.push(
@@ -61,6 +64,243 @@ class _HomeScreenState extends State<HomeScreen> {
           MaterialPageRoute(builder: (context) => const SettingsScreen()),
         );
         break;
+    }
+  }
+
+  void _showReportsBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2C2C2C),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              const Text(
+                'Reports & Analytics',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              _buildReportOption(
+                'Stock Level Report',
+                'View current stock levels and trends',
+                Icons.bar_chart,
+                    () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const RealTimeStockInquiryScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              _buildReportOption(
+                'Low Stock Alerts',
+                'Parts that need attention',
+                Icons.warning,
+                    () {
+                  Navigator.pop(context);
+                  _showLowStockParts();
+                },
+              ),
+
+              _buildReportOption(
+                'Inventory Valuation',
+                'Total inventory value by category',
+                Icons.monetization_on,
+                    () {
+                  Navigator.pop(context);
+                  _showInventoryValuation();
+                },
+              ),
+
+              _buildReportOption(
+                'Part Location Report',
+                'Parts by warehouse location',
+                Icons.location_on,
+                    () {
+                  Navigator.pop(context);
+                  _showMessage('Location report feature coming soon');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReportOption(String title, String subtitle, IconData icon, VoidCallback onTap) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2196F3).withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: const Color(0xFF2196F3)),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: Colors.grey, fontSize: 12),
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+      onTap: onTap,
+    );
+  }
+
+  void _showLowStockParts() async {
+    try {
+      final stockService = context.read<StockInquiryService>();
+      final lowStockParts = await stockService.getLowStockAlerts();
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF2C2C2C),
+          title: const Text(
+            'Low Stock Alert',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: lowStockParts.isEmpty
+                ? const Center(
+              child: Text(
+                'No low stock alerts',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+                : ListView.builder(
+              itemCount: lowStockParts.length,
+              itemBuilder: (context, index) {
+                final part = lowStockParts[index];
+                return ListTile(
+                  title: Text(
+                    part.partNumber,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    part.name,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${part.quantity} left',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      _showMessage('Error loading low stock parts: $e');
+    }
+  }
+
+  void _showInventoryValuation() async {
+    try {
+      final stockService = context.read<StockInquiryService>();
+      final valuation = await stockService.getStockValuationByCategory();
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF2C2C2C),
+          title: const Text(
+            'Inventory Valuation',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: valuation.isEmpty
+                ? const Center(
+              child: Text(
+                'No valuation data available',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+                : ListView.builder(
+              itemCount: valuation.entries.length,
+              itemBuilder: (context, index) {
+                final entry = valuation.entries.elementAt(index);
+                return ListTile(
+                  title: Text(
+                    entry.key,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                  trailing: Text(
+                    'RM ${entry.value.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Color(0xFF2196F3),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      _showMessage('Error loading inventory valuation: $e');
     }
   }
 
@@ -103,6 +343,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          // Refresh Button
+          IconButton(
+            onPressed: () {
+              context.read<PartsService>().fetchParts();
+              _showMessage('Data refreshed');
+            },
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Data',
+          ),
+
           // User Profile Button
           Consumer<AuthService>(
             builder: (context, authService, child) {
@@ -240,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showMessage(BuildContext context, String message) {
+  void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -303,19 +553,31 @@ class HomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // Stock Inquiry Dashboard Widget
+          const StockInquiryDashboardWidget(),
+          const SizedBox(height: 16),
+
+          // Quick Stock Check Widget
+          const QuickStockCheckWidget(),
+          const SizedBox(height: 16),
+
+          // Stock Alert Widget
+          const StockAlertWidget(),
+          const SizedBox(height: 24),
+
+          // Quick Stats Section
+          _buildQuickStats(context),
+          const SizedBox(height: 24),
+
           const Text(
-            'Part Request/Issue',
+            'Quick Actions',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 20),
-
-          // Quick Stats Section
-          _buildQuickStats(context),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // Action Cards
           _buildActionCard(
@@ -328,6 +590,23 @@ class HomeContent extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const BarcodeScannerScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          _buildActionCard(
+            context,
+            icon: Icons.search,
+            title: 'Real-time Stock Search',
+            subtitle: 'Advanced search with live stock data',
+            color: const Color(0xFF2196F3),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const RealTimeStockInquiryScreen(),
+                ),
               );
             },
           ),
@@ -350,15 +629,15 @@ class HomeContent extends StatelessWidget {
 
           _buildActionCard(
             context,
-            icon: Icons.search,
-            title: 'Search Options',
-            subtitle: 'Search for parts by prefix or barcode',
-            color: const Color(0xFF2196F3),
+            icon: Icons.check_box,
+            title: 'Parts Marking',
+            subtitle: 'Mark the status of parts in inventory',
+            color: const Color(0xFF607D8B),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const SearchPartsScreen(),
+                  builder: (context) => const PartMarkingScreen(),
                 ),
               );
             },
@@ -375,23 +654,6 @@ class HomeContent extends StatelessWidget {
               _showMessage(context, 'Inventory Management feature coming soon');
             },
           ),
-          const SizedBox(height: 16),
-
-          _buildActionCard(
-            context,
-            icon: Icons.check_box,
-            title: 'Parts Marking',
-            subtitle: 'Mark the status of parts in inventory',
-            color: const Color(0xFF607D8B),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PartMarkingScreen(),
-                ),
-              );
-            },
-          ),
 
           const SizedBox(height: 32),
         ],
@@ -403,9 +665,9 @@ class HomeContent extends StatelessWidget {
     return Consumer<PartsService>(
       builder: (context, partsService, child) {
         final totalParts = partsService.parts.length;
-        final lowStockParts = partsService.parts.where((part) => part.quantity < 5).length;
+        final lowStockParts = partsService.parts.where((part) => part.quantity < 5 && part.quantity > 0).length;
         final availableParts = partsService.parts.where((part) => part.quantity > 0).length;
-        final damagedParts = partsService.parts.where((part) => part.status == 'damaged').length;
+        final outOfStockParts = partsService.parts.where((part) => part.quantity == 0).length;
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -429,10 +691,28 @@ class HomeContent extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   const Text(
-                    'Quick Overview',
+                    'Inventory Overview',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Live',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -472,8 +752,8 @@ class HomeContent extends StatelessWidget {
                   ),
                   Expanded(
                     child: _buildStatItem(
-                      'Damaged',
-                      damagedParts.toString(),
+                      'Out of Stock',
+                      outOfStockParts.toString(),
                       Icons.error,
                       Colors.red,
                     ),

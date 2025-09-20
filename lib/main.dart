@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'services/parts_service.dart';
+import 'services/stock_inquiry_service.dart';
 import 'models/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -27,6 +28,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => AuthService()),
         ChangeNotifierProvider(create: (context) => PartsService()),
+        ChangeNotifierProvider(create: (context) => StockInquiryService()),
       ],
       child: MaterialApp(
         title: 'PartInventory Pro',
@@ -43,6 +45,16 @@ class MyApp extends StatelessWidget {
             backgroundColor: Color(0xFF2C2C2C),
             foregroundColor: Colors.white,
           ),
+          cardTheme: const CardThemeData(
+            color: Color(0xFF2C2C2C),
+            elevation: 0,
+          ),
+          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+            backgroundColor: Color(0xFF2C2C2C),
+            selectedItemColor: Color(0xFF2196F3),
+            unselectedItemColor: Colors.grey,
+            type: BottomNavigationBarType.fixed,
+          ),
         ),
         initialRoute: '/',
         routes: {
@@ -56,8 +68,22 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize auth service when app starts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthService>().initializeAuth();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +93,29 @@ class AuthWrapper extends StatelessWidget {
           return const Scaffold(
             backgroundColor: Color(0xFF1A1A1A),
             body: Center(
-              child: CircularProgressIndicator(color: Color(0xFF2196F3)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF2196F3)),
+                  SizedBox(height: 24),
+                  Text(
+                    'PartInventory Pro',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Loading...',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         }
