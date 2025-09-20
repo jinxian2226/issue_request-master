@@ -358,18 +358,6 @@ class HomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          _buildActionCard(
-            context,
-            icon: Icons.inventory_2,
-            title: 'Inventory Management',
-            subtitle: 'Manage stock levels and part locations',
-            color: const Color(0xFFFF9800),
-            onTap: () {
-              _showMessage(context, 'Inventory Management feature coming soon');
-            },
-          ),
-
-          const SizedBox(height: 32),
         ],
       ),
     );
