@@ -156,6 +156,178 @@ class PartsService extends ChangeNotifier {
     }
   }
 
+  // Updated getDeliveries method with correct Supabase syntax
+  Future<List<Map<String, dynamic>>> getDeliveries({String? partId, String? trackingNumber}) async {
+    try {
+      // First try to check if table exists by doing a simple query
+      try {
+        await _supabase.from('part_deliveries').select('id').limit(1);
+      } catch (e) {
+        // If table doesn't exist, return empty list
+        print('part_deliveries table does not exist: $e');
+        return [];
+      }
+
+      var query = _supabase.from('part_deliveries').select('''
+      id,
+      part_id,
+      quantity_sent,
+      delivery_address,
+      recipient_name,
+      recipient_phone,
+      delivery_type,
+      priority,
+      special_instructions,
+      requested_delivery_date,
+      sent_by,
+      status,
+      tracking_number,
+      delivery_cost,
+      actual_delivery_date,
+      delivery_notes,
+      created_at,
+      updated_at,
+      parts:part_id (
+        part_number,
+        name,
+        category
+      )
+    ''');
+
+      if (partId != null) {
+        query = query.eq('part_id', partId);
+      }
+
+      if (trackingNumber != null) {
+        query = query.eq('tracking_number', trackingNumber);
+      }
+
+      final response = await query.order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching deliveries: $e');
+      // Return empty list instead of throwing error
+      return [];
+    }
+  }
+
+// Also update the sendPartsToAddress method to handle table creation
+  Future<void> sendPartsToAddress({
+    required String partId,
+    required int quantitySent,
+    required String deliveryAddress,
+    required String recipientName,
+    required String recipientPhone,
+    required String deliveryType,
+    required String priority,
+    String? specialInstructions,
+    DateTime? requestedDeliveryDate,
+    required String sentBy,
+    required double deliveryCost,
+  }) async {
+    try {
+      // Generate tracking number
+      final trackingNumber = 'TRK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
+      // Create delivery record
+      final deliveryData = {
+        'part_id': partId,
+        'quantity_sent': quantitySent,
+        'delivery_address': deliveryAddress,
+        'recipient_name': recipientName,
+        'recipient_phone': recipientPhone,
+        'delivery_type': deliveryType,
+        'priority': priority,
+        'special_instructions': specialInstructions,
+        'requested_delivery_date': requestedDeliveryDate?.toIso8601String(),
+        'sent_by': sentBy,
+        'status': 'pending_pickup',
+        'tracking_number': trackingNumber,
+        'delivery_cost': deliveryCost,
+      };
+
+      try {
+        await _supabase.from('part_deliveries').insert(deliveryData);
+      } catch (e) {
+        if (e.toString().contains('part_deliveries')) {
+          throw Exception('Delivery tracking table not found. Please contact your administrator to set up delivery tracking.');
+        }
+        throw Exception('Error creating delivery record: $e');
+      }
+
+      // Update part quantity (reduce inventory)
+      final part = await getPartById(partId);
+      if (part != null) {
+        final newQuantity = part.quantity - quantitySent;
+        await _supabase
+            .from('parts')
+            .update({
+          'quantity': newQuantity,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+            .eq('id', partId);
+      }
+
+      // Create transaction record for audit trail
+      try {
+        await _supabase.from('part_transactions').insert({
+          'part_id': partId,
+          'transaction_type': 'transferred',
+          'quantity': -quantitySent, // Negative because it's leaving inventory
+          'previous_quantity': part?.quantity ?? 0,
+          'new_quantity': (part?.quantity ?? 0) - quantitySent,
+          'notes': 'Parts sent to address: $deliveryAddress (Tracking: $trackingNumber)',
+          'performed_by': sentBy,
+          'metadata': {
+            'delivery_type': deliveryType,
+            'recipient_name': recipientName,
+            'tracking_number': trackingNumber,
+            'delivery_cost': deliveryCost,
+          },
+        });
+      } catch (e) {
+        print('Note: part_transactions table not available: $e');
+      }
+
+      await fetchParts();
+    } catch (e) {
+      throw Exception('Error sending parts to address: $e');
+    }
+  }
+
+  // Update delivery status
+  Future<void> updateDeliveryStatus({
+    required String deliveryId,
+    required String status,
+    String? deliveryNotes,
+    DateTime? actualDeliveryDate,
+  }) async {
+    try {
+      final updateData = {
+        'status': status,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (deliveryNotes != null) {
+        updateData['delivery_notes'] = deliveryNotes;
+      }
+
+      if (actualDeliveryDate != null) {
+        updateData['actual_delivery_date'] = actualDeliveryDate.toIso8601String();
+      }
+
+      await _supabase
+          .from('part_deliveries')
+          .update(updateData)
+          .eq('id', deliveryId);
+    } catch (e) {
+      if (e.toString().contains('part_deliveries')) {
+        throw Exception('Delivery tracking table not found. Please contact your administrator.');
+      }
+      throw Exception('Error updating delivery status: $e');
+    }
+  }
+
   // Cancel an issue (restore inventory)
   Future<void> cancelIssue(String issueId) async {
     try {

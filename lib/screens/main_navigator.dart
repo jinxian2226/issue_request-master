@@ -6,6 +6,7 @@ import 'home_screen.dart';
 import 'real_time_stock_inquiry_screen.dart';
 import 'work_order_tracking_screen.dart';
 import 'settings_screen.dart';
+import 'delivery_tracking_screen.dart';
 
 class MainNavigator extends StatefulWidget {
   const MainNavigator({super.key});
@@ -101,6 +102,21 @@ class _MainNavigatorState extends State<MainNavigator> {
                     () {
                   Navigator.pop(context);
                   _showLowStockParts();
+                },
+              ),
+
+              _buildReportOption(
+                'Delivery Tracking',
+                'Track sent parts and deliveries',
+                Icons.local_shipping,
+                    () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DeliveryTrackingScreen(),
+                    ),
+                  );
                 },
               ),
 

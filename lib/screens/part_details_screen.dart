@@ -4,6 +4,7 @@ import '../models/part.dart';
 import '../services/parts_service.dart';
 import 'issue_form_screen.dart';
 import 'request_form_screen.dart';
+import 'send_parts_to_address_screen.dart';
 
 class PartDetailsScreen extends StatelessWidget {
   final Part part;
@@ -15,7 +16,7 @@ class PartDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A),
       appBar: AppBar(
-        title: const Text('Scan Part Barcode'),
+        title: const Text('Part Details'),
         backgroundColor: const Color(0xFF2C2C2C),
       ),
       body: SingleChildScrollView(
@@ -163,6 +164,39 @@ class PartDetailsScreen extends StatelessWidget {
                     child: const Text(
                       'Continue to Issue Form',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => SendPartsToAddressScreen(part: part),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.local_shipping, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Send to Address',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
                 ),

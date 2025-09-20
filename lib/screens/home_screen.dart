@@ -11,6 +11,7 @@ import 'work_order_tracking_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'part_marking.dart';
 import 'settings_screen.dart';
+import 'delivery_tracking_screen.dart';
 import '../widgets/stock_inquiry_dashboard_widget.dart';
 import '../widgets/quick_stock_check_widget.dart';
 import '../widgets/stock_alert_widget.dart';
@@ -31,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<PartsService>().fetchParts();
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +306,21 @@ class HomeContent extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => const RealTimeStockInquiryScreen(),
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+
+          _buildActionCard(
+            context,
+            icon: Icons.local_shipping,
+            title: 'Delivery Tracking',
+            subtitle: 'Track parts sent to addresses and delivery status',
+            color: Colors.green,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DeliveryTrackingScreen()),
               );
             },
           ),
