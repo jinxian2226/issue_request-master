@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'services/parts_service.dart';
 import 'services/stock_inquiry_service.dart';
+import 'services/theme_service.dart';
 import 'models/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigator.dart';
@@ -26,41 +27,26 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (context) => ThemeService()),
         ChangeNotifierProvider(create: (context) => AuthService()),
         ChangeNotifierProvider(create: (context) => PartsService()),
         ChangeNotifierProvider(create: (context) => StockInquiryService()),
       ],
-      child: MaterialApp(
-        title: 'PartInventory Pro',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primaryColor: const Color(0xFF2196F3),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF2196F3),
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-          scaffoldBackgroundColor: const Color(0xFF1A1A1A),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF2C2C2C),
-            foregroundColor: Colors.white,
-          ),
-          cardTheme: const CardThemeData(
-            color: Color(0xFF2C2C2C),
-            elevation: 0,
-          ),
-          bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-            backgroundColor: Color(0xFF2C2C2C),
-            selectedItemColor: Color(0xFF2196F3),
-            unselectedItemColor: Colors.grey,
-            type: BottomNavigationBarType.fixed,
-          ),
-        ),
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const AuthWrapper(),
-          '/login': (context) => const LoginScreen(),
-          '/home': (context) => const MainNavigator(),
+      child: Consumer<ThemeService>(
+        builder: (context, themeService, child) {
+          return MaterialApp(
+            title: 'PartInventory Pro',
+            debugShowCheckedModeBanner: false,
+            theme: themeService.lightTheme,
+            darkTheme: themeService.darkTheme,
+            themeMode: themeService.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+            initialRoute: '/',
+            routes: {
+              '/': (context) => const AuthWrapper(),
+              '/login': (context) => const LoginScreen(),
+              '/home': (context) => const MainNavigator(),
+            },
+          );
         },
       ),
     );
@@ -86,30 +72,30 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthService>(
-      builder: (context, authService, child) {
+    return Consumer2<AuthService, ThemeService>(
+      builder: (context, authService, themeService, child) {
         if (authService.isLoading) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF1A1A1A),
+          return Scaffold(
+            backgroundColor: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey[100],
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(color: Color(0xFF2196F3)),
-                  SizedBox(height: 24),
+                  const CircularProgressIndicator(color: Color(0xFF2196F3)),
+                  const SizedBox(height: 24),
                   Text(
                     'PartInventory Pro',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: themeService.isDarkMode ? Colors.white : Colors.black,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     'Loading...',
                     style: TextStyle(
-                      color: Colors.grey,
+                      color: themeService.isDarkMode ? Colors.grey : Colors.grey[600],
                       fontSize: 16,
                     ),
                   ),
