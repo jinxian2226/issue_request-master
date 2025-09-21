@@ -157,18 +157,25 @@ class PartsService extends ChangeNotifier {
     }
   }
 
-  // Updated getDeliveries method with correct Supabase syntax
   Future<List<Map<String, dynamic>>> getDeliveries({String? partId, String? trackingNumber}) async {
     try {
-      // First try to check if table exists by doing a simple query
+      // Debug: Print what we're trying to do
+      print('Attempting to fetch deliveries from part_deliveries table');
+
+      // Test if table exists with a simple query
       try {
-        await _supabase.from('part_deliveries').select('id').limit(1);
+        final testQuery = await _supabase
+            .from('part_deliveries')
+            .select('id')
+            .limit(1);
+        print('Table exists, found ${testQuery.length} records for test query');
       } catch (e) {
-        // If table doesn't exist, return empty list
-        print('part_deliveries table does not exist: $e');
+        print('Table access failed: $e');
+        // Return empty list if table doesn't exist
         return [];
       }
 
+      // Build the main query
       var query = _supabase.from('part_deliveries').select('''
       id,
       part_id,
@@ -195,24 +202,32 @@ class PartsService extends ChangeNotifier {
       )
     ''');
 
+      // Apply filters if provided
       if (partId != null) {
         query = query.eq('part_id', partId);
+        print('Filtering by part_id: $partId');
       }
 
       if (trackingNumber != null) {
         query = query.eq('tracking_number', trackingNumber);
+        print('Filtering by tracking_number: $trackingNumber');
       }
 
+      // Execute query
       final response = await query.order('created_at', ascending: false);
+      print('Successfully fetched ${response.length} deliveries');
+
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching deliveries: $e');
-      // Return empty list instead of throwing error
+      print('Error in getDeliveries: $e');
+      print('Error type: ${e.runtimeType}');
+
+      // Return empty list instead of throwing
       return [];
     }
   }
 
-// Also update the sendPartsToAddress method to handle table creation
+// Also update your sendPartsToAddress method:
   Future<void> sendPartsToAddress({
     required String partId,
     required int quantitySent,
@@ -227,8 +242,11 @@ class PartsService extends ChangeNotifier {
     required double deliveryCost,
   }) async {
     try {
+      print('Attempting to send parts to address...');
+
       // Generate tracking number
       final trackingNumber = 'TRK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      print('Generated tracking number: $trackingNumber');
 
       // Create delivery record
       final deliveryData = {
@@ -247,10 +265,14 @@ class PartsService extends ChangeNotifier {
         'delivery_cost': deliveryCost,
       };
 
+      print('Inserting delivery data: $deliveryData');
+
       try {
-        await _supabase.from('part_deliveries').insert(deliveryData);
+        final result = await _supabase.from('part_deliveries').insert(deliveryData).select();
+        print('Successfully created delivery: $result');
       } catch (e) {
-        if (e.toString().contains('part_deliveries')) {
+        print('Failed to insert delivery: $e');
+        if (e.toString().contains('part_deliveries') || e.toString().contains('relation') || e.toString().contains('does not exist')) {
           throw Exception('Delivery tracking table not found. Please contact your administrator to set up delivery tracking.');
         }
         throw Exception('Error creating delivery record: $e');
@@ -260,6 +282,8 @@ class PartsService extends ChangeNotifier {
       final part = await getPartById(partId);
       if (part != null) {
         final newQuantity = part.quantity - quantitySent;
+        print('Updating part quantity from ${part.quantity} to $newQuantity');
+
         await _supabase
             .from('parts')
             .update({
@@ -269,7 +293,7 @@ class PartsService extends ChangeNotifier {
             .eq('id', partId);
       }
 
-      // Create transaction record for audit trail
+      // Create transaction record for audit trail (if table exists)
       try {
         await _supabase.from('part_transactions').insert({
           'part_id': partId,
@@ -286,17 +310,20 @@ class PartsService extends ChangeNotifier {
             'delivery_cost': deliveryCost,
           },
         });
+        print('Transaction record created');
       } catch (e) {
         print('Note: part_transactions table not available: $e');
       }
 
       await fetchParts();
+      print('Parts list refreshed');
     } catch (e) {
+      print('Error in sendPartsToAddress: $e');
       throw Exception('Error sending parts to address: $e');
     }
   }
 
-  // Update delivery status
+// Update delivery status method with better error handling:
   Future<void> updateDeliveryStatus({
     required String deliveryId,
     required String status,
@@ -304,6 +331,8 @@ class PartsService extends ChangeNotifier {
     DateTime? actualDeliveryDate,
   }) async {
     try {
+      print('Updating delivery status for $deliveryId to $status');
+
       final updateData = {
         'status': status,
         'updated_at': DateTime.now().toIso8601String(),
@@ -317,12 +346,16 @@ class PartsService extends ChangeNotifier {
         updateData['actual_delivery_date'] = actualDeliveryDate.toIso8601String();
       }
 
-      await _supabase
+      final result = await _supabase
           .from('part_deliveries')
           .update(updateData)
-          .eq('id', deliveryId);
+          .eq('id', deliveryId)
+          .select();
+
+      print('Successfully updated delivery status: $result');
     } catch (e) {
-      if (e.toString().contains('part_deliveries')) {
+      print('Error updating delivery status: $e');
+      if (e.toString().contains('part_deliveries') || e.toString().contains('relation')) {
         throw Exception('Delivery tracking table not found. Please contact your administrator.');
       }
       throw Exception('Error updating delivery status: $e');
