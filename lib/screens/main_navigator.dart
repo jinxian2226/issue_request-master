@@ -120,25 +120,6 @@ class _MainNavigatorState extends State<MainNavigator> {
                 },
               ),
 
-              _buildReportOption(
-                'Inventory Valuation',
-                'Total inventory value by category',
-                Icons.monetization_on,
-                    () {
-                  Navigator.pop(context);
-                  _showInventoryValuation();
-                },
-              ),
-
-              _buildReportOption(
-                'Part Location Report',
-                'Parts by warehouse location',
-                Icons.location_on,
-                    () {
-                  Navigator.pop(context);
-                  _showMessage('Location report feature coming soon');
-                },
-              ),
             ],
           ),
         );

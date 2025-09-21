@@ -20,7 +20,11 @@ class _RealTimeStockInquiryScreenState extends State<RealTimeStockInquiryScreen>
   String _selectedFilter = 'All';
   String _selectedSortBy = 'Name';
   String _selectedStockFilter = 'All Stock';
-  final List<String> _filters = ['All', 'Brake', 'Engine', 'Transmission', 'Suspension'];
+
+
+  final List<String> _filters = ['All', 'Brake System', 'Engine', 'Transmission', 'Suspension'];
+
+
   final List<String> _sortOptions = ['Name', 'Part Number', 'Stock Level', 'Price', 'Location'];
   final List<String> _stockFilters = ['All Stock', 'In Stock', 'Low Stock', 'Out of Stock'];
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/part.dart';
+import '../models/auth_service.dart';
 import '../services/parts_service.dart';
 import 'issue_success_screen.dart';
 
@@ -40,6 +41,9 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authService = context.watch<AuthService>();
+    final currentUsername = authService.currentUser ?? 'Unknown User';
+
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A),
       appBar: AppBar(
@@ -62,7 +66,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Part Number Field
               _buildTextField(
                 controller: _partNumberController,
                 label: 'Part Number',
@@ -70,7 +73,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Description Field
               _buildTextField(
                 initialValue: widget.part.name,
                 label: 'Description',
@@ -78,7 +80,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Quantity Field
               _buildTextField(
                 controller: _quantityController,
                 label: 'Quantity',
@@ -99,15 +100,13 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Assigned To Field
               _buildTextField(
                 label: 'Assigned To',
-                initialValue: 'Michael Torres',
+                initialValue: currentUsername,
                 enabled: false,
               ),
               const SizedBox(height: 16),
 
-              // Issue Type Selection
               const Text(
                 'Issue Type',
                 style: TextStyle(
@@ -157,7 +156,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Work Order Field (conditional)
               if (_selectedIssueType == 'work_order') ...[
                 _buildTextField(
                   controller: _workOrderController,
@@ -173,7 +171,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // Reason for Issue
               const Text(
                 'Reason for Issue',
                 style: TextStyle(
@@ -212,7 +209,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Notes Field
               _buildTextField(
                 controller: _notesController,
                 label: 'Notes (Optional)',
@@ -221,7 +217,6 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Action Buttons
               Column(
                 children: [
                   SizedBox(
@@ -233,32 +228,40 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
+                          ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
                           : const Text(
-                        'Issue Parts Now',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        'Issue Part',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
-                    child: TextButton(
+                    child: OutlinedButton(
                       onPressed: _isLoading ? null : () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.grey),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       child: const Text(
                         'Cancel',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 16),
                       ),
                     ),
                   ),
@@ -275,10 +278,10 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
     TextEditingController? controller,
     String? initialValue,
     required String label,
-    String? hintText,
     TextInputType? keyboardType,
     bool enabled = true,
     int maxLines = 1,
+    String? hintText,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -337,12 +340,14 @@ class _IssueFormScreenState extends State<IssueFormScreen> {
 
     try {
       final partsService = context.read<PartsService>();
+      final authService = context.read<AuthService>();
+      final currentUsername = authService.currentUser ?? 'Unknown User';
 
       await partsService.issuePart(
         partId: widget.part.id,
         quantity: int.parse(_quantityController.text),
         issueType: _selectedIssueType,
-        issuedBy: 'Michael Torres', // In real app, get from auth
+        issuedBy: currentUsername, // Use the logged-in username
         workOrder: _selectedIssueType == 'work_order' ? _workOrderController.text : null,
         notes: _notesController.text.isNotEmpty ? _notesController.text : null,
       );
