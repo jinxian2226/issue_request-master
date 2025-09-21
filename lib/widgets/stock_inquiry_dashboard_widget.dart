@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/real_time_stock_inquiry_screen.dart';
@@ -5,7 +6,7 @@ import '../screens/real_time_stock_inquiry_screen.dart';
 class StockInquiryDashboardWidget extends StatelessWidget {
   const StockInquiryDashboardWidget({super.key});
 
-  // Direct Supabase query - bypassing the service layer
+  // FIXED: Direct Supabase query with correct threshold (quantity < 10)
   Future<Map<String, dynamic>> _getDashboardData() async {
     try {
       final supabase = Supabase.instance.client;
@@ -15,7 +16,9 @@ class StockInquiryDashboardWidget extends StatelessWidget {
           .from('parts')
           .select('quantity, pricing, warehouse_bay, shelf_number');
 
-      print('Dashboard query response: $response');
+      if (kDebugMode) {
+        debugPrint('Dashboard query response: ${response.length} parts found');
+      }
 
       if (response.isEmpty) {
         return {
@@ -46,10 +49,10 @@ class StockInquiryDashboardWidget extends StatelessWidget {
         // Calculate totals
         totalValue += quantity * pricing;
 
-        // Stock categorization
+        // FIXED: Stock categorization with threshold 10
         if (quantity == 0) {
           outOfStockParts++;
-        } else if (quantity < 5) {
+        } else if (quantity < 10) { // CHANGED: from < 5 to < 10
           lowStockParts++;
           inStockParts++; // Low stock items are still "in stock"
         } else {
@@ -65,6 +68,14 @@ class StockInquiryDashboardWidget extends StatelessWidget {
       final stockHealthPercentage = totalParts > 0 ? (inStockParts / totalParts * 100) : 0.0;
       final locationCompletionPercentage = totalParts > 0 ? (partsWithLocation / totalParts * 100) : 0.0;
 
+      if (kDebugMode) {
+        debugPrint('Dashboard calculations:');
+        debugPrint('- Total parts: $totalParts');
+        debugPrint('- Out of stock: $outOfStockParts');
+        debugPrint('- Low stock (< 10): $lowStockParts');
+        debugPrint('- In stock: $inStockParts');
+      }
+
       return {
         'total_parts': totalParts,
         'in_stock_parts': inStockParts,
@@ -76,7 +87,7 @@ class StockInquiryDashboardWidget extends StatelessWidget {
         'last_updated': DateTime.now(),
       };
     } catch (e) {
-      print('Dashboard error: $e');
+      debugPrint('Dashboard error: $e');
       rethrow;
     }
   }
@@ -205,56 +216,17 @@ class StockInquiryDashboardWidget extends StatelessWidget {
     final totalValue = data['total_inventory_value'] ?? 0.0;
     final stockHealthPercentage = data['stock_health_percentage'] ?? 0.0;
     final locationCompletionPercentage = data['location_completion_percentage'] ?? 0.0;
-    final lastUpdated = data['last_updated'] as DateTime?;
+    final lastUpdated = data['last_updated'] as DateTime? ?? DateTime.now();
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2C),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF2196F3).withValues(alpha: 0.3),
-          width: 1,
-        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Real-time indicator
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Real-time Data',
-                style: TextStyle(
-                  color: Colors.green,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              if (lastUpdated != null)
-                Text(
-                  'Updated ${_getTimeAgo(lastUpdated)}',
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 10,
-                  ),
-                ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Main Statistics Grid
+          // Top row - Total Parts and In Stock
           Row(
             children: [
               Expanded(
@@ -262,8 +234,8 @@ class StockInquiryDashboardWidget extends StatelessWidget {
                   'Total Parts',
                   totalParts.toString(),
                   Icons.inventory,
-                  Colors.blue,
-                  null,
+                  const Color(0xFF2196F3),
+                  100, // Always 100% for total
                 ),
               ),
               const SizedBox(width: 8),
@@ -281,11 +253,12 @@ class StockInquiryDashboardWidget extends StatelessWidget {
 
           const SizedBox(height: 8),
 
+          // Bottom row - Low Stock and Out of Stock
           Row(
             children: [
               Expanded(
                 child: _buildStatCard(
-                  'Low Stock',
+                  'Low Stock (<10)',
                   lowStockParts.toString(),
                   Icons.warning,
                   Colors.orange,
@@ -354,73 +327,52 @@ class StockInquiryDashboardWidget extends StatelessWidget {
                   locationCompletionPercentage >= 90 ? Colors.green :
                   locationCompletionPercentage >= 70 ? Colors.orange : Colors.red,
                 ),
+
+                const SizedBox(height: 8),
+
+                // Last Updated
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.update, color: Colors.grey, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Updated ${_getTimeAgo(lastUpdated)}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 11),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Quick Actions
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickActionButton(
-                  context,
-                  'View Stock Alerts',
-                  Icons.notifications,
-                  Colors.orange,
-                      () => _navigateToStockAlerts(context),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildQuickActionButton(
-                  context,
-                  'Location Report',
-                  Icons.location_on,
-                  Colors.blue,
-                      () => _navigateToLocationReport(context),
-                ),
-              ),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(
-      String label,
-      String value,
-      IconData icon,
-      Color color,
-      double? percentage,
-      ) {
+  Widget _buildStatCard(String label, String value, IconData icon, Color color, double percentage) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(icon, color: color, size: 16),
               const SizedBox(width: 6),
-              Expanded(
+              Flexible(
                 child: Text(
                   label,
                   style: TextStyle(
                     color: color,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ],
@@ -434,16 +386,14 @@ class StockInquiryDashboardWidget extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (percentage != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              '${percentage.toStringAsFixed(1)}%',
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 9,
-              ),
+          const SizedBox(height: 4),
+          Text(
+            '${percentage.toStringAsFixed(1)}%',
+            style: TextStyle(
+              color: color.withOpacity(0.7),
+              fontSize: 10,
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -472,58 +422,10 @@ class StockInquiryDashboardWidget extends StatelessWidget {
         const SizedBox(height: 4),
         LinearProgressIndicator(
           value: percentage / 100,
-          backgroundColor: Colors.grey.withValues(alpha: 0.3),
+          backgroundColor: Colors.grey.withOpacity(0.3),
           valueColor: AlwaysStoppedAnimation<Color>(color),
-          minHeight: 4,
         ),
       ],
-    );
-  }
-
-  Widget _buildQuickActionButton(
-      BuildContext context,
-      String label,
-      IconData icon,
-      Color color,
-      VoidCallback onTap,
-      ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: 16),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -540,37 +442,5 @@ class StockInquiryDashboardWidget extends StatelessWidget {
     } else {
       return '${difference.inDays}d ago';
     }
-  }
-
-  void _navigateToStockAlerts(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const RealTimeStockInquiryScreen(),
-      ),
-    );
-  }
-
-  void _navigateToLocationReport(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF2C2C2C),
-        title: const Text(
-          'Location Report',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Location report feature will be available in future updates.',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 }

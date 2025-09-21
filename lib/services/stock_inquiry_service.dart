@@ -1,5 +1,4 @@
-
-// Fixed version of stock_inquiry_service.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/part.dart';
@@ -14,7 +13,7 @@ class StockInquiryService extends ChangeNotifier {
   List<String> get searchHistory => _searchHistory;
   DateTime? get lastStockCheck => _lastStockCheck;
 
-  // FIXED: Real-time stock inquiry
+  // Real-time stock inquiry
   Future<List<Part>> getRealTimeStock({
     String? query,
     String? category,
@@ -72,7 +71,7 @@ class StockInquiryService extends ChangeNotifier {
         queryBuilder = queryBuilder.eq('shelf_number', shelfNumber);
       }
 
-      // FIXED: Proper type casting
+      // Proper type casting
       final response = await queryBuilder.order('name') as List;
 
       final results = response
@@ -84,12 +83,12 @@ class StockInquiryService extends ChangeNotifier {
 
       return results;
     } catch (e) {
-      print('Error in getRealTimeStock: $e'); // Add debugging
+      debugPrint('Error in getRealTimeStock: $e');
       throw Exception('Error getting real-time stock: $e');
     }
   }
 
-  // FIXED: Get parts by stock status
+  // Get parts by stock status with threshold 10
   Future<Map<String, List<Part>>> getPartsByStockStatus() async {
     try {
       final response = await _supabase
@@ -111,7 +110,7 @@ class StockInquiryService extends ChangeNotifier {
       for (Part part in allParts) {
         if (part.quantity == 0) {
           categorizedParts['out_of_stock']!.add(part);
-        } else if (part.quantity < 5) {
+        } else if (part.quantity < 10) { // CHANGED: from < 5 to < 10
           categorizedParts['low_stock']!.add(part);
         } else if (part.quantity < 20) {
           categorizedParts['normal_stock']!.add(part);
@@ -122,19 +121,19 @@ class StockInquiryService extends ChangeNotifier {
 
       return categorizedParts;
     } catch (e) {
-      print('Error in getPartsByStockStatus: $e');
+      debugPrint('Error in getPartsByStockStatus: $e');
       throw Exception('Error categorizing stock: $e');
     }
   }
 
-  // FIXED: Get dashboard data with better error handling
+  // Get dashboard data with better error handling and threshold 10
   Future<Map<String, dynamic>> getStockInquiryDashboard() async {
     try {
       final allParts = await getRealTimeStock();
 
       final totalParts = allParts.length;
       final inStockParts = allParts.where((part) => part.quantity > 0).length;
-      final lowStockParts = allParts.where((part) => part.quantity > 0 && part.quantity < 5).length;
+      final lowStockParts = allParts.where((part) => part.quantity > 0 && part.quantity < 10).length; // CHANGED: from < 5 to < 10
       final outOfStockParts = allParts.where((part) => part.quantity == 0).length;
       final totalValue = allParts.fold(0.0, (sum, part) => sum + (part.pricing * part.quantity));
 
@@ -156,13 +155,13 @@ class StockInquiryService extends ChangeNotifier {
         'last_updated': DateTime.now(),
       };
     } catch (e) {
-      print('Error in getStockInquiryDashboard: $e');
+      debugPrint('Error in getStockInquiryDashboard: $e');
       throw Exception('Error getting dashboard data: $e');
     }
   }
 
-  // FIXED: Low stock alerts
-  Future<List<Part>> getLowStockAlerts({int threshold = 5}) async {
+  // Low stock alerts with threshold 10
+  Future<List<Part>> getLowStockAlerts({int threshold = 10}) async { // CHANGED: from 5 to 10
     try {
       final response = await _supabase
           .from('parts')
@@ -175,12 +174,12 @@ class StockInquiryService extends ChangeNotifier {
           .map<Part>((json) => Part.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('Error in getLowStockAlerts: $e');
+      debugPrint('Error in getLowStockAlerts: $e');
       throw Exception('Error getting low stock alerts: $e');
     }
   }
 
-  // FIXED: Stock valuation by category
+  // Stock valuation by category
   Future<Map<String, double>> getStockValuationByCategory() async {
     try {
       final response = await _supabase
@@ -205,7 +204,7 @@ class StockInquiryService extends ChangeNotifier {
 
       return valuationMap;
     } catch (e) {
-      print('Error in getStockValuationByCategory: $e');
+      debugPrint('Error in getStockValuationByCategory: $e');
       throw Exception('Error calculating stock valuation: $e');
     }
   }
