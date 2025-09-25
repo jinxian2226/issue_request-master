@@ -264,10 +264,6 @@ class HomeContent extends StatelessWidget {
           const StockAlertWidget(),
           const SizedBox(height: 24),
 
-          // Quick Stats Section
-          _buildQuickStats(context),
-          const SizedBox(height: 24),
-
           const Text(
             'Quick Actions',
             style: TextStyle(
