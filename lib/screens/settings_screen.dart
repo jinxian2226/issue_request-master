@@ -11,71 +11,36 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // User profile data
-  String _username = '';
-  String _email = '';
-
   // App settings
   bool _pushNotifications = true;
 
   // Form controllers
-  final _profileFormKey = GlobalKey<FormState>();
   final _passwordFormKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _oldPasswordController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _initializeProfile();
-  }
-
-  void _initializeProfile() {
-    final authService = context.read<AuthService>();
-    _username = authService.currentUser ?? 'User';
-    _email = '${_username}@example.com';
-
-    _usernameController.text = _username;
-    _emailController.text = _email;
-  }
-
-  @override
   void dispose() {
-    _usernameController.dispose();
-    _emailController.dispose();
     _oldPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _saveProfile() async {
-    if (!_profileFormKey.currentState!.validate()) return;
-
-    setState(() {
-      _username = _usernameController.text;
-      _email = _emailController.text;
-    });
-
-    _showSuccessMessage('Profile updated successfully!');
-  }
-
   Future<void> _changePassword() async {
     if (!_passwordFormKey.currentState!.validate()) return;
+
+    if (_newPasswordController.text != _confirmPasswordController.text) {
+      _showErrorMessage('Passwords do not match!');
+      return;
+    }
 
     // Show confirmation dialog
     final confirmed = await _showPasswordChangeDialog();
     if (!confirmed) return;
 
     final authService = context.read<AuthService>();
-
-    if (_newPasswordController.text != _confirmPasswordController.text) {
-      _showErrorMessage('Passwords do not match!');
-      return;
-    }
 
     final success = await authService.changePassword(
       _oldPasswordController.text,
@@ -100,7 +65,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await authService.logout();
 
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/login',
+            (route) => false,
+      );
     }
   }
 
@@ -129,7 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2196F3)),
-            child: const Text('Yes, Change Password'),
+            child: const Text('Change Password'),
           ),
         ],
       ),
@@ -173,6 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -182,53 +152,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
-      ),
-    );
-  }
-
-  void _showNotificationDialog() {
-    final themeService = context.read<ThemeService>();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: themeService.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-        title: Row(
-          children: [
-            const Icon(
-              Icons.notifications_active,
-              color: Color(0xFF2196F3),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Notifications',
-              style: TextStyle(
-                color: themeService.isDarkMode ? Colors.white : Colors.black,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Push notifications have been enabled! You will now receive important updates and alerts.',
-          style: TextStyle(
-            color: themeService.isDarkMode ? Colors.grey : Colors.grey[700],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2196F3)),
-            child: const Text('Got it!'),
-          ),
-        ],
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeService>(
-      builder: (context, themeService, _) {
+    return Consumer2<ThemeService, AuthService>(
+      builder: (context, themeService, authService, _) {
         return Scaffold(
           backgroundColor: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey[100],
           appBar: AppBar(
@@ -244,52 +176,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Profile Section
+                // Current User Display
                 _buildSectionCard(
-                  title: 'Profile Information',
-                  icon: Icons.person_outline,
-                  child: Form(
-                    key: _profileFormKey,
-                    child: Column(
-                      children: [
-                        _buildTextField(
-                          controller: _usernameController,
-                          label: 'Username',
-                          prefixIcon: Icons.person,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter a username';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTextField(
-                          controller: _emailController,
-                          label: 'Email',
-                          prefixIcon: Icons.email,
-                          validator: (value) {
-                            if (value == null || !value.contains('@')) {
-                              return 'Please enter a valid email';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _saveProfile,
-                            icon: const Icon(Icons.save),
-                            label: const Text('Save Profile'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2196F3),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
+                  title: 'Current User',
+                  icon: Icons.account_circle,
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFF2196F3),
+                      child: Text(
+                        (authService.currentUser?.isNotEmpty == true)
+                            ? authService.currentUser![0].toUpperCase()
+                            : 'U',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    title: Text(
+                      authService.currentUser ?? 'Unknown User',
+                      style: TextStyle(
+                        color: themeService.isDarkMode ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Logged in successfully',
+                      style: TextStyle(
+                        color: const Color(0xFF2196F3),
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -344,15 +258,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _changePassword,
-                            icon: const Icon(Icons.key),
-                            label: const Text('Change Password'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2196F3),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
+                          child: Consumer<AuthService>(
+                            builder: (context, authService, child) {
+                              return ElevatedButton.icon(
+                                onPressed: authService.isLoading ? null : _changePassword,
+                                icon: authService.isLoading
+                                    ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                                    : const Icon(Icons.key),
+                                label: Text(authService.isLoading ? 'Changing...' : 'Change Password'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2196F3),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -375,9 +299,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           setState(() {
                             _pushNotifications = value;
                           });
-                          if (value) {
-                            _showNotificationDialog();
-                          }
                         },
                       ),
                       _buildSwitchTile(
@@ -385,7 +306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         subtitle: 'Use dark theme throughout the app',
                         value: themeService.isDarkMode,
                         onChanged: (value) {
-                          themeService.setTheme(value);
+                          themeService.toggleTheme();
                         },
                       ),
                     ],
@@ -393,10 +314,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Logout Section
+                // Account Actions Section
                 _buildSectionCard(
                   title: 'Account Actions',
-                  icon: Icons.logout,
+                  icon: Icons.exit_to_app,
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -411,7 +332,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -427,31 +347,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Consumer<ThemeService>(
       builder: (context, themeService, _) {
-        return Card(
-          color: themeService.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        return Container(
+          decoration: BoxDecoration(
+            color: themeService.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
                   children: [
-                    Icon(icon, color: const Color(0xFF2196F3), size: 20),
-                    const SizedBox(width: 8),
+                    Icon(
+                      icon,
+                      color: const Color(0xFF2196F3),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
                     Text(
                       title,
                       style: TextStyle(
-                        color: themeService.isDarkMode ? Colors.white : Colors.black,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: themeService.isDarkMode ? Colors.white : Colors.black,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                child,
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: child,
+              ),
+            ],
           ),
         );
       },
@@ -470,29 +406,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return TextFormField(
           controller: controller,
           obscureText: obscureText,
-          style: TextStyle(color: themeService.isDarkMode ? Colors.white : Colors.black),
           validator: validator,
+          style: TextStyle(color: themeService.isDarkMode ? Colors.white : Colors.black),
           decoration: InputDecoration(
             labelText: label,
             labelStyle: TextStyle(color: themeService.isDarkMode ? Colors.grey : Colors.grey[600]),
             prefixIcon: Icon(prefixIcon, color: themeService.isDarkMode ? Colors.grey : Colors.grey[600]),
             filled: true,
-            fillColor: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey[50],
+            fillColor: themeService.isDarkMode ? const Color(0xFF3C3C3C) : Colors.grey[100],
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: themeService.isDarkMode ? Colors.grey.withOpacity(0.3) : Colors.grey.withOpacity(0.5)),
-            ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Color(0xFF2196F3)),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF2196F3), width: 2),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.red),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red, width: 1),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
             ),
           ),
         );
@@ -508,32 +444,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Consumer<ThemeService>(
       builder: (context, themeService, _) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SwitchListTile(
-            title: Text(
-              title,
-              style: TextStyle(
-                color: themeService.isDarkMode ? Colors.white : Colors.black,
-                fontWeight: FontWeight.w500,
-              ),
+        return SwitchListTile(
+          title: Text(
+            title,
+            style: TextStyle(
+              color: themeService.isDarkMode ? Colors.white : Colors.black,
+              fontWeight: FontWeight.w500,
             ),
-            subtitle: Text(
-              subtitle,
-              style: TextStyle(
-                color: themeService.isDarkMode ? Colors.grey : Colors.grey[600],
-                fontSize: 12,
-              ),
-            ),
-            value: value,
-            onChanged: onChanged,
-            activeColor: const Color(0xFF2196F3),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           ),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(
+              color: themeService.isDarkMode ? Colors.grey : Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+          value: value,
+          onChanged: onChanged,
+          activeColor: const Color(0xFF2196F3),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 0),
         );
       },
     );

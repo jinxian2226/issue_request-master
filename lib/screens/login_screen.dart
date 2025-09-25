@@ -14,6 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isRegistering = false;
 
   @override
   void dispose() {
@@ -35,6 +36,36 @@ class _LoginScreenState extends State<LoginScreen> {
     if (success && mounted) {
       Navigator.pushReplacementNamed(context, '/home');
     }
+  }
+
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final authService = context.read<AuthService>();
+
+    final success = await authService.register(
+      _usernameController.text.trim(),
+      _passwordController.text,
+    );
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration successful! You are now logged in.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
+  void _toggleMode() {
+    setState(() {
+      _isRegistering = !_isRegistering;
+      _usernameController.clear();
+      _passwordController.clear();
+    });
+    context.read<AuthService>().clearError();
   }
 
   @override
@@ -87,6 +118,63 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 48),
 
+                  // Mode Toggle
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2C2C2C),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (_isRegistering) _toggleMode();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: !_isRegistering ? const Color(0xFF2196F3) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Login',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: !_isRegistering ? Colors.white : Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              if (!_isRegistering) _toggleMode();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _isRegistering ? const Color(0xFF2196F3) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Register',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _isRegistering ? Colors.white : Colors.grey,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
                   // Username Field
                   _buildTextField(
                     controller: _usernameController,
@@ -95,6 +183,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your username';
+                      }
+                      if (_isRegistering && value.length < 3) {
+                        return 'Username must be at least 3 characters';
                       }
                       return null;
                     },
@@ -122,60 +213,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your password';
                       }
+                      if (_isRegistering && value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
                       return null;
-                    },
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Login Button
-                  Consumer<AuthService>(
-                    builder: (context, authService, child) {
-                      return SizedBox(
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: authService.isLoading ? null : _login,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2196F3),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: authService.isLoading
-                              ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      );
                     },
                   ),
                   const SizedBox(height: 24),
 
-                  // Error Message
+                  // Error Display
                   Consumer<AuthService>(
                     builder: (context, authService, child) {
                       if (authService.error != null) {
                         return Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
                             color: Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.red.withOpacity(0.3),
-                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.withOpacity(0.3)),
                           ),
                           child: Row(
                             children: [
@@ -202,9 +258,47 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
 
+                  // Action Button
+                  Consumer<AuthService>(
+                    builder: (context, authService, child) {
+                      return SizedBox(
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: authService.isLoading
+                              ? null
+                              : _isRegistering ? _register : _login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2196F3),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: authService.isLoading
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                              : Text(
+                            _isRegistering ? 'Create Account' : 'Login',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
                   const SizedBox(height: 32),
 
-                  // Demo Credentials
+                  // Info Section
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -214,27 +308,43 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           children: [
                             Icon(
-                              Icons.info_outline,
-                              color: Color(0xFF2196F3),
+                              _isRegistering ? Icons.person_add : Icons.info_outline,
+                              color: const Color(0xFF2196F3),
                               size: 20,
                             ),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
-                              'Demo Credentials',
-                              style: TextStyle(
+                              _isRegistering ? 'Create New Account' : 'Simple Login',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        _buildDemoCredential('alex123', 'password123'),
-                        _buildDemoCredential('admin', 'admin123'),
-                        _buildDemoCredential('demo', 'demo123'),
+                        const SizedBox(height: 8),
+                        Text(
+                          _isRegistering
+                              ? 'Just enter a username and password to create your account. No email required!'
+                              : 'Login with just your username and password. Simple and secure.',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (_isRegistering) ...[
+                          const SizedBox(height: 12),
+                          const Text(
+                            '• Username: minimum 3 characters\n• Password: minimum 6 characters',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -258,8 +368,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
-      style: const TextStyle(color: Colors.white),
       validator: validator,
+      style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.grey),
@@ -271,60 +381,17 @@ class _LoginScreenState extends State<LoginScreen> {
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.grey.withOpacity(0.3),
-          ),
-        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Color(0xFF2196F3),
-            width: 2,
-          ),
+          borderSide: const BorderSide(color: Color(0xFF2196F3), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
-            color: Colors.red,
-          ),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDemoCredential(String username, String password) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: GestureDetector(
-        onTap: () {
-          _usernameController.text = username;
-          _passwordController.text = password;
-        },
-        child: Row(
-          children: [
-            const Icon(
-              Icons.account_circle,
-              color: Colors.grey,
-              size: 16,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '$username / $password',
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
-                fontFamily: 'monospace',
-              ),
-            ),
-            const Spacer(),
-            const Icon(
-              Icons.touch_app,
-              color: Colors.grey,
-              size: 16,
-            ),
-          ],
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.red, width: 2),
         ),
       ),
     );

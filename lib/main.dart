@@ -76,26 +76,19 @@ class _AuthWrapperState extends State<AuthWrapper> {
       builder: (context, authService, themeService, child) {
         if (authService.isLoading) {
           return Scaffold(
-            backgroundColor: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.grey[100],
-            body: Center(
+            backgroundColor: themeService.isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+            body: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircularProgressIndicator(color: Color(0xFF2196F3)),
-                  const SizedBox(height: 24),
-                  Text(
-                    'PartInventory Pro',
-                    style: TextStyle(
-                      color: themeService.isDarkMode ? Colors.white : Colors.black,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2196F3)),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 16),
                   Text(
-                    'Loading...',
+                    'Initializing...',
                     style: TextStyle(
-                      color: themeService.isDarkMode ? Colors.grey : Colors.grey[600],
+                      color: Color(0xFF2196F3),
                       fontSize: 16,
                     ),
                   ),
@@ -107,9 +100,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         if (authService.isLoggedIn) {
           return const MainNavigator();
+        } else {
+          return const LoginScreen();
         }
-
-        return const LoginScreen();
       },
     );
   }
